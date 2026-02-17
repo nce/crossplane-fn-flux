@@ -123,6 +123,9 @@ jobs:
   push:
     if: ${{ github.event_name != 'pull_request' }}
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      packages: write
     needs:
       - build
     steps:
