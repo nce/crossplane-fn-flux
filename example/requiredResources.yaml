@@ -1,0 +1,8 @@
+apiVersion: eks.aws.m.upbound.io/v1beta1
+kind: Cluster
+metadata:
+  name: name-of-cluster
+  namespace: foobar
+status:
+  atProvider:
+    arn: shit

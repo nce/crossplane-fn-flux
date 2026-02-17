@@ -1,0 +1,14 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: function-flux-remote-connection
+spec:
+  compositeTypeRef:
+    apiVersion: internal.ab.de
+    kind: OnlineFluxRemoteConnection
+  mode: Pipeline
+  pipeline:
+  - step: run-the-template
+    functionRef:
+      name: function-flux-remote-connection
+

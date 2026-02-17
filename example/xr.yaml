@@ -1,0 +1,8 @@
+# Replace this with your XR!
+apiVersion: internal.ab.de
+kind: OnlineFluxRemoteConnection
+metadata:
+  name: test
+  namespace: foobar
+spec: 
+  clusterName: foobar
