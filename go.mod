@@ -6,9 +6,9 @@ require (
 	github.com/alecthomas/kong v1.13.0
 	github.com/crossplane/function-sdk-go v0.5.0
 	github.com/google/go-cmp v0.7.0
+	github.com/upbound/provider-aws/v2 v2.4.0
 	google.golang.org/protobuf v1.36.11
 	k8s.io/apimachinery v0.34.3
-	sigs.k8s.io/controller-tools v0.19.0
 )
 
 require (
@@ -80,7 +80,6 @@ require (
 	github.com/spf13/cobra v1.10.1 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/tmccombs/hcl2json v0.3.3 // indirect
-	github.com/upbound/provider-aws/v2 v2.4.0 // indirect
 	github.com/vmihailenco/msgpack v4.0.4+incompatible // indirect
 	github.com/vmihailenco/msgpack/v5 v5.4.1 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
@@ -103,7 +102,6 @@ require (
 	golang.org/x/text v0.31.0 // indirect
 	golang.org/x/time v0.11.0 // indirect
 	golang.org/x/tools v0.38.0 // indirect
-	golang.org/x/tools/go/expect v0.1.1-deprecated // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
 	google.golang.org/appengine v1.6.8 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251007200510-49b9836ed3ff // indirect
@@ -122,6 +120,7 @@ require (
 	k8s.io/kube-openapi v0.0.0-20250710124328-f3f2b991d03b // indirect
 	k8s.io/utils v0.0.0-20251002143259-bc988d571ff4 // indirect
 	sigs.k8s.io/controller-runtime v0.19.0 // indirect
+	sigs.k8s.io/controller-tools v0.19.0 // indirect
 	sigs.k8s.io/json v0.0.0-20241014173422-cfa47c3a1cc8 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
 	sigs.k8s.io/structured-merge-diff/v6 v6.3.0 // indirect
