@@ -33,25 +33,34 @@ func (f *Function) RunFunction(_ context.Context, req *fnv1.RunFunctionRequest) 
 
 	rsp := response.To(req, response.DefaultTTL)
 
-	// xr, err := request.GetObservedCompositeResource(req)
-	// if err != nil {
-	// 	response.Fatal(rsp, errors.Wrapf(err, "cannot get observed composite resource from %T", req))
-	// 	return rsp, nil
-	// }
+	xr, err := request.GetObservedCompositeResource(req)
+	if err != nil {
+		response.Fatal(rsp, errors.Wrapf(err, "cannot get observed composite resource from %T", req))
+		return rsp, nil
+	}
+
+	clusterName, err := xr.Resource.GetString("spec.clusterName")
+	if err != nil {
+		response.Fatal(rsp, errors.Wrapf(err, "cannot read spec.clusterName field of %s", xr.Resource.GetKind()))
+		return rsp, nil
+	}
+
+	namespace := xr.Resource.GetNamespace()
+
 	// f.log.Info("req", "foo", req.GetRequiredResources())
 
 	//namespace := xr.Resource.GetNamespace()
 	extra := make(map[string]*fnv1.ResourceSelector, 1)
 
 	extra["cluster"] = &fnv1.ResourceSelector{
-		Namespace:  proto.String("foobar"),
+		Namespace:  proto.String(namespace),
 		ApiVersion: "eks.aws.m.upbound.io/v1beta1",
 		Kind:       "Cluster",
 		// Match: &fnv1.ResourceSelector_MatchLabels{
 		// 	MatchLabels: &fnv1.MatchLabels{Labels: map[string]string{"label": "foo"}},
 		// },
 		Match: &fnv1.ResourceSelector_MatchName{
-			MatchName: "name-of-cluster",
+			MatchName: clusterName,
 		},
 	}
 
