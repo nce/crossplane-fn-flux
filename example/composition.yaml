@@ -8,6 +8,17 @@ spec:
     kind: OnlineFluxRemoteConnection
   mode: Pipeline
   pipeline:
+  - step: environmentConfigs
+    functionRef:
+      name: function-environment-configs
+    input:
+      apiVersion: environmentconfigs.fn.crossplane.io/v1beta1
+      kind: Input
+      spec:
+        environmentConfigs:
+        - type: Reference
+          ref:
+            name: mc-defaults
   - step: run-the-template
     functionRef:
       name: function-flux-remote-connection

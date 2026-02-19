@@ -2,18 +2,21 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 
+	"github.com/crossplane/crossplane-runtime/v2/apis/common"
 	eks "github.com/upbound/provider-aws/v2/apis/namespaced/eks/v1beta1"
-	s3 "github.com/upbound/provider-aws/v2/apis/namespaced/s3/v1beta1"
-
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	fnv1 "github.com/crossplane/function-sdk-go/proto/v1"
 	"google.golang.org/protobuf/proto"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
+	fncontext "github.com/crossplane/function-sdk-go/context"
 	"github.com/crossplane/function-sdk-go/errors"
 	"github.com/crossplane/function-sdk-go/logging"
+	fnv1 "github.com/crossplane/function-sdk-go/proto/v1"
 	"github.com/crossplane/function-sdk-go/request"
 	"github.com/crossplane/function-sdk-go/resource"
 	"github.com/crossplane/function-sdk-go/resource/composed"
@@ -25,6 +28,30 @@ type Function struct {
 	fnv1.UnimplementedFunctionRunnerServiceServer
 
 	log logging.Logger
+}
+
+//nolint:tagliatelle //format is given by cluster
+type MangementCluster struct {
+	AccountID     string `json:"management-cluster-id"`
+	DefaultRegion string `json:"default-region"`
+}
+
+func getEksClusterSelector(xr *resource.Composite) (*fnv1.ResourceSelector, error) {
+	clusterName, err := xr.Resource.GetString("spec.clusterName")
+	if err != nil {
+		return nil, fmt.Errorf("cannot read spec.clusterName field of %s", xr.Resource.GetKind())
+	}
+
+	res := &fnv1.ResourceSelector{
+		ApiVersion: "eks.aws.m.upbound.io/v1beta1",
+		Kind:       "Cluster",
+		Namespace:  proto.String(xr.Resource.GetNamespace()),
+		Match: &fnv1.ResourceSelector_MatchName{
+			MatchName: clusterName,
+		},
+	}
+
+	return res, nil
 }
 
 // RunFunction runs the Function.
@@ -39,58 +66,79 @@ func (f *Function) RunFunction(_ context.Context, req *fnv1.RunFunctionRequest) 
 		return rsp, nil
 	}
 
-	clusterName, err := xr.Resource.GetString("spec.clusterName")
+	eksResourceSelector, err := getEksClusterSelector(xr)
 	if err != nil {
-		response.Fatal(rsp, errors.Wrapf(err, "cannot read spec.clusterName field of %s", xr.Resource.GetKind()))
+		response.Fatal(rsp, errors.Wrapf(err, "cannot create Eks Selector for %T", req))
 		return rsp, nil
 	}
 
-	namespace := xr.Resource.GetNamespace()
-
-	// f.log.Info("req", "foo", req.GetRequiredResources())
-
-	//namespace := xr.Resource.GetNamespace()
-	extra := make(map[string]*fnv1.ResourceSelector, 1)
-
-	extra["cluster"] = &fnv1.ResourceSelector{
-		Namespace:  proto.String(namespace),
-		ApiVersion: "eks.aws.m.upbound.io/v1beta1",
-		Kind:       "Cluster",
-		// Match: &fnv1.ResourceSelector_MatchLabels{
-		// 	MatchLabels: &fnv1.MatchLabels{Labels: map[string]string{"label": "foo"}},
-		// },
-		Match: &fnv1.ResourceSelector_MatchName{
-			MatchName: clusterName,
+	// construct a response requirement to signal crossplane, that we need additional
+	// resources in the function. We need an eks cluster to extract its endpoint
+	rsp.Requirements = &fnv1.Requirements{
+		Resources: map[string]*fnv1.ResourceSelector{
+			"eks": eksResourceSelector,
 		},
 	}
 
-	rsp.Requirements = &fnv1.Requirements{Resources: extra}
-	fmt.Printf("Incoming Requirements: %+v\n", req.GetRequiredResources())
-	// Check if cluster already provided
 	if len(req.GetRequiredResources()) == 0 {
-		//if req.GetRequiredResources()["cluster"] == nil {
+		// if we have not populated our required ressources in our request, we signal
+		// crossplane to fetch the requirements and rerun this function again
+		f.log.Debug("requirements", "msg", "required resources not available")
 
-		f.log.Info("dep", "baz", "dependend resource not found")
+		// this can happen up to 5 times
+		return rsp, nil
+	}
+
+	if len(req.GetRequiredResources()["eks"].GetItems()) == 0 {
+		// the api server was not able to fetch our depended ressources
+		// we have to fail and wait until the requirements are fulfilled
+		response.Fatal(rsp, fmt.Errorf("dependend eks cluster not available: %s/%s",
+			eksResourceSelector.GetNamespace(),
+			eksResourceSelector.GetMatchName(),
+		))
 
 		return rsp, nil
 	}
 
-	fmt.Printf("Outgoing Requirements: %+v\n", rsp.Requirements)
+	env := &unstructured.Unstructured{}
+	if v, ok := request.GetContextKey(req, fncontext.KeyEnvironment); ok {
+		if err := resource.AsObject(v.GetStructValue(), env); err != nil {
+			response.Fatal(rsp, errors.Wrapf(err, "cannot get Composition environment from %T context key %q", req, fncontext.KeyEnvironment))
+			return rsp, nil
+		}
 
-	if len(req.GetRequiredResources()["cluster"].GetItems()) == 0 {
-		return rsp, fmt.Errorf("could not retrieve cluster")
+		f.log.Debug("Loaded Composition environment from Function context", "context-key", fncontext.KeyEnvironment)
 	}
 
+	var mc MangementCluster
+
+	d, err := json.Marshal(env.Object)
+	if err != nil {
+		response.Fatal(rsp, errors.Wrap(err, "cannot decode environment into struct"))
+		return rsp, nil
+	}
+
+	if err := json.Unmarshal(d, &mc); err != nil {
+		response.Fatal(rsp, errors.Wrap(err, "cannot decode environment into struct"))
+		return rsp, nil
+	}
+
+	if mc.AccountID == "" {
+		response.Fatal(rsp, errors.New("cannot decode management-cluster account id from environment config"))
+		return rsp, nil
+	}
+
+	_ = eks.AddToScheme(composed.Scheme)
 	eksCluster := &eks.Cluster{}
-	resource.AsObject(req.GetRequiredResources()["cluster"].GetItems()[0].GetResource(), eksCluster)
+	// transform the unstructered data into an eks resource
+	if err := resource.AsObject(req.GetRequiredResources()["eks"].GetItems()[0].GetResource(), eksCluster); err != nil {
+		response.Fatal(rsp, errors.Wrapf(err, "could not parse eks cluster: %s/%s",
+			eksResourceSelector.GetNamespace(),
+			eksResourceSelector.GetMatchName(),
+		))
 
-	// clusterNam, err := xr.Resource.GetString("spec.clusterName")
-	// if err != nil {
-	// 	response.Fatal(rsp, errors.Wrapf(err, "cannot read spec.region field of %s", xr.Resource.GetKind()))
-	// 	return rsp, nil
-	// }
-
-	f.log.Info("proc", "baz", "processing depenencies")
+		return rsp, nil
+	}
 
 	// Get all desired composed resources from the request. The function will
 	// update this map of resources, then save it. This get, update, set pattern
@@ -101,33 +149,107 @@ func (f *Function) RunFunction(_ context.Context, req *fnv1.RunFunctionRequest) 
 		return rsp, nil
 	}
 
-	_ = s3.AddToScheme(composed.Scheme)
+	clusterName, err := xr.Resource.GetString("spec.clusterName")
+	if err != nil {
+		return nil, fmt.Errorf("cannot read spec.clusterName field of %s", xr.Resource.GetKind())
+	}
 
-	b := &s3.Bucket{
+	providerConfig := &common.ProviderConfigReference{
+		Name: "aws",
+		Kind: "ProviderConfig",
+	}
+
+	var ca string
+
+	if eksCluster.Status.AtProvider.CertificateAuthority != nil {
+		raw := eksCluster.Status.AtProvider.CertificateAuthority[0].Data
+
+		decoded, err := base64.StdEncoding.DecodeString(*raw)
+		if err != nil {
+			return nil, fmt.Errorf("cannot decode ca of cluster %s", xr.Resource.GetName())
+		}
+
+		ca = string(decoded)
+	}
+
+	_ = corev1.AddToScheme(composed.Scheme)
+	configmap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: *eksCluster.Status.AtProvider.Arn,
-			// Set the external name annotation to the desired bucket name.
-			// This controls what the bucket will be named in AWS.
+			Name: xr.Resource.GetName(),
 			Annotations: map[string]string{
-				"crossplane.io/external-name": "foo",
+				"crossplane.io/external-name": "flux-remote-connection",
 			},
 		},
-		Spec: s3.BucketSpec{
-			ForProvider: s3.BucketParameters{
-				// Set the bucket's region to the value read from the XR.
-				//Region: ptr.To[string](clusterName),
-				Region: eksCluster.Status.AtProvider.Arn,
-			},
+		Data: map[string]string{
+			"provider": "aws",
+			"cluster":  *eksCluster.Status.AtProvider.Arn,
+			"address":  *eksCluster.Status.AtProvider.Endpoint,
+			"ca.crt":   *proto.String(ca),
 		},
 	}
 
-	cd, err := composed.From(b)
+	cd, err := composed.From(configmap)
 	if err != nil {
-		response.Fatal(rsp, errors.Wrapf(err, "cannot convert %T to %T", b, &composed.Unstructured{}))
+		response.Fatal(rsp, errors.Wrapf(err, "cannot convert %T to %T", configmap, &composed.Unstructured{}))
 		return rsp, nil
 	}
 
-	desired[resource.Name("test")] = &resource.DesiredComposed{Resource: cd}
+	desired[resource.Name("configmap")] = &resource.DesiredComposed{Resource: cd}
+
+	accessEntry := &eks.AccessEntry{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: xr.Resource.GetName(),
+			Annotations: map[string]string{
+				"crossplane.io/external-name": "flux-remote-connection",
+			},
+		},
+		Spec: eks.AccessEntrySpec{
+			ForProvider: eks.AccessEntryParameters{
+				Region:       &mc.DefaultRegion,
+				ClusterName:  &clusterName,
+				PrincipalArn: proto.String(fmt.Sprintf("arn:aws:iam::%s:role/flux-remote-connection", mc.AccountID)),
+			},
+		},
+	}
+
+	accessEntry.SetProviderConfigReference(providerConfig)
+
+	cd, err = composed.From(accessEntry)
+	if err != nil {
+		response.Fatal(rsp, errors.Wrapf(err, "cannot convert %T to %T", accessEntry, &composed.Unstructured{}))
+		return rsp, nil
+	}
+
+	desired[resource.Name("accessentry")] = &resource.DesiredComposed{Resource: cd}
+
+	accesspolicyassociation := &eks.AccessPolicyAssociation{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: xr.Resource.GetName(),
+			Annotations: map[string]string{
+				"crossplane.io/external-name": "flux-remote-connection",
+			},
+		},
+		Spec: eks.AccessPolicyAssociationSpec{
+			ForProvider: eks.AccessPolicyAssociationParameters{
+				Region:       &mc.DefaultRegion,
+				ClusterName:  &clusterName,
+				PrincipalArn: proto.String(fmt.Sprintf("arn:aws:iam::%s:role/flux-remote-connection", mc.AccountID)),
+				PolicyArn:    proto.String("arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"),
+				AccessScope: &eks.AccessScopeParameters{
+					Type: proto.String("cluster"),
+				},
+			},
+		},
+	}
+	accesspolicyassociation.SetProviderConfigReference(providerConfig)
+
+	cd, err = composed.From(accesspolicyassociation)
+	if err != nil {
+		response.Fatal(rsp, errors.Wrapf(err, "cannot convert %T to %T", accesspolicyassociation, &composed.Unstructured{}))
+		return rsp, nil
+	}
+
+	desired[resource.Name("accesspolicyassociation")] = &resource.DesiredComposed{Resource: cd}
 
 	// Finally, save the updated desired composed resources to the response.
 	if err := response.SetDesiredComposedResources(rsp, desired); err != nil {
@@ -135,12 +257,8 @@ func (f *Function) RunFunction(_ context.Context, req *fnv1.RunFunctionRequest) 
 		return rsp, nil
 	}
 
-	// You can set a custom status condition on the XR. This allows you
-	// to communicate with the user.
 	response.ConditionTrue(rsp, "FunctionSuccess", "Success").
 		TargetComposite()
-
-	f.log.Info("proc", "baz", "processing depenencies2")
 
 	return rsp, nil
 }

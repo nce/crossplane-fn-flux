@@ -1,3 +1,9 @@
+apiVersion: pkg.crossplane.io/v1beta1
+kind: Function
+metadata:
+  name: function-environment-configs
+spec:
+  package: xpkg.upbound.io/crossplane-contrib/function-environment-configs:v0.6.0
 ---
 apiVersion: pkg.crossplane.io/v1beta1
 kind: Function

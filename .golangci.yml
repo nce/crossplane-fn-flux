@@ -1,12 +1,10 @@
-# copied from https://github.com/crossplane/crossplane/blob/main/.golangci.yml and
-# updated slightly for this repository.
 version: "2"
 
-output:
-  formats:
-    text:
-      path: stderr
-
+# output:
+#   formats:
+#     text:
+#       path: stderr
+#
 linters:
   default: all
   disable:
