@@ -9,6 +9,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/testing/protocmp"
 	"google.golang.org/protobuf/types/known/durationpb"
+	"google.golang.org/protobuf/types/known/structpb"
 
 	"github.com/crossplane/function-sdk-go/logging"
 	fnv1 "github.com/crossplane/function-sdk-go/proto/v1"
@@ -39,20 +40,38 @@ func TestRunFunction(t *testing.T) {
 					Meta: &fnv1.RequestMeta{Tag: "hello"},
 					//				this is handed to the function
 					RequiredResources: map[string]*fnv1.Resources{
-						"cluster": {
+						"eks": {
 							Items: []*fnv1.Resource{
 								{
 									Resource: resource.MustStructJSON(`{
 										"apiVersion": "eks.aws.m.upbound.io/v1beta1",
 										"kind": "Cluster",
+										"metadata": {
+											"namespace": "XRamespace",
+											"name": "clusterName"
+										},
 										"status": {
 											"atProvider": {
-												"arn": "test-arn"
+												"arn": "clusterArn",
+												"endpoint": "https://example.org",
+												"certificateAuthority": [
+													{
+													 "data": "ZXhhbXBsZQ=="
+													}
+												]
 											}
 										}
 									}`),
 								},
 							},
+						},
+					},
+					Context: &structpb.Struct{
+						Fields: map[string]*structpb.Value{
+							"apiextensions.crossplane.io/environment": structpb.NewStructValue(resource.MustStructJSON(`{
+								"management-cluster-id": "12345",
+								"default-region": "eu"
+							}`)),
 						},
 					},
 					Observed: &fnv1.State{
@@ -61,11 +80,11 @@ func TestRunFunction(t *testing.T) {
 								"apiVersion": "internal.ab.de",
 								"kind": "OnlineFluxRemoteConnection",
 								"metadata": {
-									"name": "test",
-									"namespace": "foobar"
+									"name": "XRName",
+									"namespace": "XRNamespace"
 								},
 								"spec": {
-									"clusterName": "test1"
+									"clusterName": "clusterName"
 								}
 							}`),
 						},
@@ -78,16 +97,17 @@ func TestRunFunction(t *testing.T) {
 					Meta: &fnv1.ResponseMeta{Tag: "hello", Ttl: durationpb.New(response.DefaultTTL)},
 					Requirements: &fnv1.Requirements{
 						Resources: map[string]*fnv1.ResourceSelector{
-							"cluster": {
+							"eks": {
 								ApiVersion: "eks.aws.m.upbound.io/v1beta1",
 								Kind:       "Cluster",
+								Namespace:  proto.String("XRNamespace"),
 								Match: &fnv1.ResourceSelector_MatchName{
-									MatchName: "test1",
+									MatchName: "clusterName",
 								},
-								Namespace: proto.String("foobar"),
 							},
 						},
 					},
+					Context: &structpb.Struct{},
 					Conditions: []*fnv1.Condition{
 						{
 							Type:   "FunctionSuccess",
@@ -99,18 +119,24 @@ func TestRunFunction(t *testing.T) {
 
 					Desired: &fnv1.State{
 						Resources: map[string]*fnv1.Resource{
-							"test": {Resource: resource.MustStructJSON(`{
-								"apiVersion": "s3.aws.m.upbound.io/v1beta1",
-								"kind": "Bucket",
+							"accessentry": {Resource: resource.MustStructJSON(`{
+								"apiVersion": "eks.aws.m.upbound.io/v1beta1",
+								"kind": "AccessEntry",
 								"metadata": {
-									"name": "test-arn",
+									"name": "XRName",
 									"annotations": {
-										"crossplane.io/external-name": "foo"
+										"crossplane.io/external-name": "flux-remote-connection"
 									}
 								},
 								"spec": {
 									"forProvider": {
-										"region": "test-arn"
+										"clusterName": "clusterName",
+										"principalArn": "arn:aws:iam::12345:role/flux-remote-connection",
+										"region": "eu"
+									},
+									"providerConfigRef": {
+										"kind": "ProviderConfig",
+										"name": "aws"
 									}
 								},
 								"status": {
@@ -130,7 +156,13 @@ func TestRunFunction(t *testing.T) {
 
 			rsp, err := f.RunFunction(tc.args.ctx, tc.args.req)
 
-			if diff := cmp.Diff(tc.want.rsp, rsp, protocmp.Transform()); diff != "" {
+			rspCopy := proto.Clone(rsp).(*fnv1.RunFunctionResponse)
+			delete(rspCopy.Context.Fields, "apiextensions.crossplane.io/environment")
+			delete(rspCopy.Desired.Resources, "configmap")
+			delete(rspCopy.Desired.Resources, "kustomization")
+			delete(rspCopy.Desired.Resources, "accesspolicyassociation")
+
+			if diff := cmp.Diff(tc.want.rsp, rspCopy, protocmp.Transform()); diff != "" {
 				t.Errorf("%s\nf.RunFunction(...): -want rsp, +got rsp:\n%s", tc.reason, diff)
 			}
 

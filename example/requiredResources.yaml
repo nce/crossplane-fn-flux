@@ -1,6 +1,13 @@
 apiVersion: apiextensions.crossplane.io/v1beta1
 kind: EnvironmentConfig
 metadata:
+  name: wrong-env
+data:
+  management-cluster-id: wrong-value
+---
+apiVersion: apiextensions.crossplane.io/v1beta1
+kind: EnvironmentConfig
+metadata:
   name: mc-defaults
 data:
   management-cluster-id: "12345"

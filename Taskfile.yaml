@@ -10,12 +10,13 @@ tasks:
     desc: Build local function
     cmd: 
       air
-
+  test:
+    desc: Run unit tests
+    cmd: go test -v -cover .
   render:
     desc: Run the examples against our local build
     dir: example
     cmd: crossplane render xr.yaml composition.yaml functions.yaml -e .
-
   lint:
     desc: Lint 
     cmd: go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@{{.GO_LINT_CI_VERSION}} -c .golangci.yml run ./...
