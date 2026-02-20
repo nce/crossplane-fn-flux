@@ -60,6 +60,12 @@ func (f *Function) RunFunction(_ context.Context, req *fnv1.RunFunctionRequest) 
 
 	rsp := response.To(req, response.DefaultTTL)
 
+	desiredComposite, err := request.GetDesiredCompositeResource(req)
+	if err != nil {
+		response.Fatal(rsp, errors.Wrap(err, "cannot get desired composite resource"))
+		return rsp, nil
+	}
+
 	xr, err := request.GetObservedCompositeResource(req)
 	if err != nil {
 		response.Fatal(rsp, errors.Wrapf(err, "cannot get observed composite resource from %T", req))
@@ -302,8 +308,8 @@ func (f *Function) RunFunction(_ context.Context, req *fnv1.RunFunctionRequest) 
 		return rsp, nil
 	}
 
-	if err := response.SetDesiredCompositeResource(rsp, xr); err != nil {
-		response.Fatal(rsp, errors.Wrapf(err, "cannot set desired composite resources in %T", rsp))
+	if err := response.SetDesiredCompositeResource(rsp, desiredComposite); err != nil {
+		response.Fatal(rsp, errors.Wrap(err, "cannot set desired composite resource"))
 		return rsp, nil
 	}
 
