@@ -6,7 +6,6 @@ require (
 	github.com/alecthomas/kong v1.13.0
 	github.com/crossplane/crossplane-runtime/v2 v2.0.0
 	github.com/crossplane/function-sdk-go v0.5.0
-	github.com/fluxcd/kustomize-controller/api v1.4.0
 	github.com/google/go-cmp v0.7.0
 	github.com/upbound/provider-aws/v2 v2.4.0
 	google.golang.org/protobuf v1.36.11
@@ -30,8 +29,6 @@ require (
 	github.com/evanphx/json-patch/v5 v5.9.11 // indirect
 	github.com/fatih/camelcase v1.0.0 // indirect
 	github.com/fatih/color v1.18.0 // indirect
-	github.com/fluxcd/pkg/apis/kustomize v1.15.0 // indirect
-	github.com/fluxcd/pkg/apis/meta v1.25.0 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.0 // indirect
 	github.com/go-json-experiment/json v0.0.0-20240815175050-ebd3a8989ca1 // indirect
