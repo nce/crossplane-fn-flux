@@ -162,7 +162,9 @@ func TestRunFunction(t *testing.T) {
 			delete(rspCopy.GetDesired().GetResources(), "kustomization")
 			delete(rspCopy.GetDesired().GetResources(), "accesspolicyassociation")
 
-			if diff := cmp.Diff(tc.want.rsp, rspCopy, protocmp.Transform()); diff != "" {
+			if diff := cmp.Diff(tc.want.rsp, rspCopy, protocmp.Transform(),
+				protocmp.IgnoreFields(&fnv1.State{}, "composite"),
+			); diff != "" {
 				t.Errorf("%s\nf.RunFunction(...): -want rsp, +got rsp:\n%s", tc.reason, diff)
 			}
 

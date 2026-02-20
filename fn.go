@@ -302,6 +302,11 @@ func (f *Function) RunFunction(_ context.Context, req *fnv1.RunFunctionRequest) 
 		return rsp, nil
 	}
 
+	if err := response.SetDesiredCompositeResource(rsp, xr); err != nil {
+		response.Fatal(rsp, errors.Wrapf(err, "cannot set desired composite resources in %T", rsp))
+		return rsp, nil
+	}
+
 	response.ConditionTrue(rsp, "FunctionSuccess", "Success").
 		TargetComposite()
 
