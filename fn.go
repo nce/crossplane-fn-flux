@@ -278,7 +278,7 @@ func (f *Function) RunFunction(_ context.Context, req *fnv1.RunFunctionRequest) 
 		"sourceRef": map[string]any{
 			"kind":      "GitRepository",
 			"namespace": "flux-system",
-			"name":      "healthcheck",
+			"name":      "portfolio-aws-k8s-koffer-produkte",
 		},
 		"healthChecks": []any{
 			map[string]any{
