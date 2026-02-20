@@ -107,7 +107,7 @@ func (f *Function) RunFunction(_ context.Context, req *fnv1.RunFunctionRequest) 
 			return rsp, nil
 		}
 
-		//Todo: only query for mc-defaults EnvConf
+		// Todo: only query for mc-defaults EnvConf
 
 		f.log.Debug("Loaded Composition environment from Function context", "context-key", fncontext.KeyEnvironment)
 	}
@@ -188,7 +188,7 @@ func (f *Function) RunFunction(_ context.Context, req *fnv1.RunFunctionRequest) 
 			"address":  *eksCluster.Status.AtProvider.Endpoint,
 			"ca.crt":   *proto.String(ca),
 		},
-		//todo: validate these atprovider fields exists
+		// todo: validate these atprovider fields exists
 	}
 
 	cd, err := composed.From(configmap)
@@ -260,28 +260,29 @@ func (f *Function) RunFunction(_ context.Context, req *fnv1.RunFunctionRequest) 
 	ks.SetAPIVersion("kustomize.toolkit.fluxcd.io/v1")
 	ks.SetKind("Kustomization")
 	ks.SetName("healthcheck")
+
 	ksanno := map[string]string{
 		"crossplane.io/external-name": "flux-remote-connection",
 	}
 	ks.SetAnnotations(ksanno)
-	ks.Object["spec"] = map[string]interface{}{
+	ks.Object["spec"] = map[string]any{
 		"interval": "5m",
 		"path":     "./healthcheck",
 		"prune":    true,
-		"sourceRef": map[string]interface{}{
+		"sourceRef": map[string]any{
 			"kind":      "GitRepository",
 			"namespace": "flux-system",
 			"name":      "healthcheck",
 		},
-		"healthChecks": []interface{}{
-			map[string]interface{}{
+		"healthChecks": []any{
+			map[string]any{
 				"apiVersion": "v1",
 				"kind":       "namespace",
 				"name":       "healthcheck",
 			},
 		},
-		"kubeConfig": map[string]interface{}{
-			"configMapRef": map[string]interface{}{
+		"kubeConfig": map[string]any{
+			"configMapRef": map[string]any{
 				"name": configmap.GetName(),
 			},
 		},
@@ -292,6 +293,7 @@ func (f *Function) RunFunction(_ context.Context, req *fnv1.RunFunctionRequest) 
 		response.Fatal(rsp, errors.Wrapf(err, "cannot convert %T to %T", ks, &composed.Unstructured{}))
 		return rsp, nil
 	}
+
 	desired[resource.Name("kustomization")] = &resource.DesiredComposed{Resource: cd}
 
 	// Finally, save the updated desired composed resources to the response.

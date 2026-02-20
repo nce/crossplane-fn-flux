@@ -157,10 +157,10 @@ func TestRunFunction(t *testing.T) {
 			rsp, err := f.RunFunction(tc.args.ctx, tc.args.req)
 
 			rspCopy := proto.Clone(rsp).(*fnv1.RunFunctionResponse)
-			delete(rspCopy.Context.Fields, "apiextensions.crossplane.io/environment")
-			delete(rspCopy.Desired.Resources, "configmap")
-			delete(rspCopy.Desired.Resources, "kustomization")
-			delete(rspCopy.Desired.Resources, "accesspolicyassociation")
+			delete(rspCopy.GetContext().GetFields(), "apiextensions.crossplane.io/environment")
+			delete(rspCopy.GetDesired().GetResources(), "configmap")
+			delete(rspCopy.GetDesired().GetResources(), "kustomization")
+			delete(rspCopy.GetDesired().GetResources(), "accesspolicyassociation")
 
 			if diff := cmp.Diff(tc.want.rsp, rspCopy, protocmp.Transform()); diff != "" {
 				t.Errorf("%s\nf.RunFunction(...): -want rsp, +got rsp:\n%s", tc.reason, diff)
