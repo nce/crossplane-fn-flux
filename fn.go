@@ -260,48 +260,6 @@ func (f *Function) RunFunction(_ context.Context, req *fnv1.RunFunctionRequest) 
 
 	desired[resource.Name("accesspolicyassociation")] = &resource.DesiredComposed{Resource: cd}
 
-	// we should not used typed kustomization api;
-	// leads to controller runtime mismatch
-	ks := &unstructured.Unstructured{}
-	ks.SetAPIVersion("kustomize.toolkit.fluxcd.io/v1")
-	ks.SetKind("Kustomization")
-	ks.SetName("healthcheck")
-
-	ksanno := map[string]string{
-		"crossplane.io/external-name": "flux-remote-connection",
-	}
-	ks.SetAnnotations(ksanno)
-	ks.Object["spec"] = map[string]any{
-		"interval": "5m",
-		"path":     "./healthcheck",
-		"prune":    true,
-		"sourceRef": map[string]any{
-			"kind":      "GitRepository",
-			"namespace": "flux-system",
-			"name":      "portfolio-aws-k8s-koffer-produkte",
-		},
-		"healthChecks": []any{
-			map[string]any{
-				"apiVersion": "v1",
-				"kind":       "namespace",
-				"name":       "healthcheck",
-			},
-		},
-		"kubeConfig": map[string]any{
-			"configMapRef": map[string]any{
-				"name": configmap.GetName(),
-			},
-		},
-	}
-
-	cd, err = composed.From(ks)
-	if err != nil {
-		response.Fatal(rsp, errors.Wrapf(err, "cannot convert %T to %T", ks, &composed.Unstructured{}))
-		return rsp, nil
-	}
-
-	desired[resource.Name("kustomization")] = &resource.DesiredComposed{Resource: cd}
-
 	// Finally, save the updated desired composed resources to the response.
 	if err := response.SetDesiredComposedResources(rsp, desired); err != nil {
 		response.Fatal(rsp, errors.Wrapf(err, "cannot set desired composed resources in %T", rsp))
